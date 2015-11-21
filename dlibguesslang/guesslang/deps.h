@@ -10,5 +10,7 @@
 #include <memory>
 
 #include <dlib/unicode/unicode.h>
-#include <utf8.h>
+
+#include "config.h"
+#include "utf8pp.h"
 #endif //GUESSLANG_DEPS_H

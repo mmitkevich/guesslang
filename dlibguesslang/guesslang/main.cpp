@@ -44,16 +44,19 @@ int main(int argc, char* argv[])
     options opts;
 
     QCommandLineParser parser;
-    parser.setApplicationDescription("GuessLang");
-    parser.addHelpOption();
-    parser.addVersionOption();
-    parser.addOption(std::move(QCommandLineOption(QStringList() << "learn" << "l", "*.learn", "*.learn")));
-    parser.addOption(std::move(QCommandLineOption(QStringList() << "validate" << "v", "*.validate", "*.validate")));
+    parser.setApplicationDescription("Guess Language");
+    parser.addOption(QCommandLineOption("l", "learn files mask", "learn", "*.sample"));
+    parser.addOption(QCommandLineOption("v", "validate files mask", "validate", "*.sample"));
 
 
 
     QCoreApplication app(argc, argv);
-    parser.process(app);
+    try {
+        parser.process(app);
+    }catch(std::exception &e) {
+        qStdOut()<<"failed to parse command line:" << e.what();
+        return -1;
+    }
 
 #ifndef NDEBUG
     for(auto opt: parser.optionNames()) {
@@ -61,21 +64,26 @@ int main(int argc, char* argv[])
     }
 #endif
 
-    QStringList learn_fns, validate_fns;
+    QStringList fns, validate_fns;
 
     DEBUG("cwd="<<QDir::currentPath())
 
-    if(parser.isSet("learn")) {
-        learn_fns << qGlob(parser.value("learn"));
-        DEBUG("found "<< learn_fns.size() << " learn samples in "<<parser.value("learn"));
+    if(parser.isSet("l")) {
+        QString val = parser.value("l");
+        fns << qGlob(val);
+        DEBUG("found "<< fns.size() << " learn samples in "<<val);
     }
-    //if(parser.isSet("validate"))
-    //    validate_fns << qGlob(parser.value("validate"));
+    if(parser.isSet("v")) {
+        QString val = parser.value("v");
+        validate_fns << qGlob(val);
+        DEBUG("found "<< validate_fns.size() << " validate samples in "<<val);
+        fns << validate_fns;
+    }
 
     const int klassifier_order = 2;
 
-    guesslang::QClassifier klassifier(15);
-    for(auto fn: learn_fns) {
+    guesslang::QClassifier klassifier(2, 15);
+    for(const auto &fn: fns) {
         QFile file(fn);
         file.open(QIODevice::ReadOnly);
         QTextStream is(&file);
@@ -84,13 +92,13 @@ int main(int argc, char* argv[])
         int n_chars;
         do {
             QParagraph sample(klassifier_order, guesslang::is_alpha, fi.baseName());
-            n_chars = sample.read(is,"",1000,10000);
+            n_chars = sample.read(is,"",100,1000);
             if(n_chars>0)
             {
                 klassifier.append(sample);
-                int n_itrs = klassifier.shuffle(10);
-                DEBUG("S"<<klassifier.n_samples()<<",from " << fn << " read "<<n_chars<< " chars :" << sample.str()<<" fitness "<<klassifier.likelihood()<<" n_lang "<<klassifier.size());
-                DEBUG("S"<<klassifier.n_samples()<<klassifier.str());
+                int n_itrs = klassifier.shuffle(50);
+                DEBUG("S"<<klassifier.n_samples()<<" | " << fi.baseName() << " | "<<n_chars<< " chr | " << sample.str()<<" | LL="<<klassifier.likelihood()<<" | n_lang "<<klassifier.size()<<" | n_learn "<<fns.size()-validate_fns.size()<<" | n_validate "<<validate_fns.size());
+                DEBUG(klassifier.str());
 
             }
         }while(n_chars>0);

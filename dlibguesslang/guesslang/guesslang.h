@@ -180,7 +180,7 @@ namespace guesslang
             return prefix_.size();
         }
 
-        const QString &label() {
+        const QString &label() const {
             return label_;
         }
 
@@ -222,7 +222,7 @@ namespace guesslang
         return stream;
     }
 
-    const double min_likelihood = 0;
+    const double min_likelihood = -1e5;
 
     /// language is set of paragraph samples
     ///
@@ -254,7 +254,7 @@ namespace guesslang
                 auto w = it.key();  // char sequence in sample of length j+1
                 auto cnt = it.value();
                 int full_cnt = 0, prefix_cnt = 0;
-                for(const auto ls: samples) {
+                for(const auto &ls: samples) {
                     full_cnt += ls.full()[w];
                     prefix_cnt += ls.prefix()[w.right(1)];
                 }
@@ -265,7 +265,7 @@ namespace guesslang
 
         int static calc_alphabet_size(const QList<QParagraph>& samples1) {
             QCounter cnt;
-            for(auto ls: samples1) {
+            for(const auto &ls: samples1) {
                 cnt += ls.prefix();
             }
             return cnt.size();
@@ -273,12 +273,12 @@ namespace guesslang
 
 
         double static calc_likelihood(const QList<QParagraph>& samples1, int m) {
-            double llh = 0;
+            double llh = min_likelihood;
             //DEBUG("calc_likelihood(n_samples="<<samples1.size()<<")")
             if(samples1.size()>0) {
                 //auto alphabet = union_alphabet(samples1);
                 //auto m = alphabet.size();
-                for(auto ls: samples1) {
+                for(const auto &ls: samples1) {
                     llh += calc_logproba(ls, samples1, m);
                 }
                 /// here we should normalize: \sum e^{lp_k} = Z
@@ -307,6 +307,8 @@ namespace guesslang
         QParagraph takeAt(int i, double *delta=nullptr) {
             QParagraph result = samples_.takeAt(i);
             prefix_-= result.prefix();
+            full_ -= result.full();
+
             if(delta) {
                 likelihood_ += *delta;
             } else {
@@ -322,9 +324,9 @@ namespace guesslang
             return llh-likelihood_;
         }
 
-        double if_takeAt(int i) const {
+        double if_removeAt(int i) const {
             QList<QParagraph> samples1(samples_);
-            samples1.takeAt(i);
+            samples1.removeAt(i);
             auto llh = calc_likelihood(samples1, calc_alphabet_size(samples1));
             return llh-likelihood_;
         }
@@ -338,8 +340,8 @@ namespace guesslang
             int best = -1;
             double best_value = min_double;
             for(int i=0; i<samples_.size(); i++) {
-                auto val = if_takeAt(i);
-                if(val >= best_value){
+                auto val = if_removeAt(i);
+                if(val > best_value){
                     best = i;
                     best_value = val;
                 }
@@ -353,8 +355,9 @@ namespace guesslang
             int best = -1;
             double best_value = min_double;
             for(int i=0; i<samples_.size(); i++) {
-                auto val = if_takeAt(i);
-                if(val >= best_value){
+                //auto val = if_removeAt(i);
+                const auto val = -likelihood_for(samples_[i]);
+                if(val > best_value){
                     best = i;
                     best_value = val;
                 }
@@ -364,8 +367,21 @@ namespace guesslang
             return best;
         }
 
-        double likelihood_for(const QParagraph &s) {
-            return calc_logproba(s, samples_, alphabet_size());
+        double likelihood_for(const QParagraph &s, bool isnew=false) const{
+            double lprob = 0.;
+            QCounter f = full_;
+            if(isnew)
+                f+= s.full();
+            QCounter p = prefix_;
+            if(isnew)
+                p+= s.prefix();
+            auto m = p.size();
+            for(auto it=s.full().cbegin(); it!=s.full().cend(); it++) {
+                const auto &w = it.key();  // char sequence in sample of length j+1
+                auto cnt = it.value();
+                lprob += double(cnt) * double(f[w] + 1) / double(p[w] + m);
+            }
+            return lprob;
         }
 
         QList<QParagraph>::const_iterator cbegin() const {
@@ -376,19 +392,15 @@ namespace guesslang
             return samples_.cend();
         }
 
-        const QString & label() const {
-            return label_;
-        }
-
         QString str() const {
             QString r;
             r.sprintf("L%s(ns=%3d,likely=%5g)\n", label().toUtf8().data(), size(), likelihood());
             QHash<QString, int> member_counts;
-            for(auto s: samples_) {
+            for(const auto &s: samples_) {
                 member_counts[s.label()] +=1;
             }
             for(decltype(member_counts)::iterator it = member_counts.begin(); it!= member_counts.end(); it++) {
-                r.sprintf(" %d %s|", it.value(), it.key().toUtf8().data());
+                r.append(QString().sprintf(" %d %s|", it.value(), it.key().toUtf8().data()));
             }
             return r;
         }
@@ -430,15 +442,24 @@ namespace guesslang
 
         double append(const QParagraph &s) {
             double delta = 0.;
-            int into_l = best_to_append(s, &delta);
-            langs_[into_l].append(s);
+            //int into_l = best_to_append(s, &delta);
+            int into_l = 0;
+            int min_size = 1000000;
+            for(int l=0;l<langs_.size();l++){
+                if(langs_[l].size()<min_size){
+                    into_l=l;
+                    min_size=langs_[l].size();
+                }
+            }
+            langs_[into_l].append(s, &delta);
             likelihood_ += delta;
             if(langs_[into_l].size()==1 && langs_.size()<max_lang_) {   // always keep one empty unknown language with minimal likelihood for possible shuffling
                 langs_.append(std::move(QLanguage(order_, QString::number(id_++))));
             }
-            double metric = langs_[into_l].likelihood_for(s);
             n_samples_++;
-            return metric;
+            //double metric = langs_[into_l].likelihood_for(s);
+            //return metric;
+            return delta;
         }
 
         int n_samples() const {
@@ -450,22 +471,28 @@ namespace guesslang
                 int from_s = -1, into_s = -1;
                 double delta = 0.;
                 int from_l = best_to_remove(&delta, &from_s);
+                DEBUG("rm from "<<langs_[from_l].str()<<"("<<langs_[from_l].size()<<") => "<<delta);
                 QParagraph s = langs_[from_l].takeAt(from_s, &delta);
                 int from_size = langs_[from_l].size();
-                if(from_size==0)
+                if(from_size==0) {
                     langs_.removeAt(from_l);        // remove empty
+                    DEBUG("empty "<<from_l);
+                }
                 double change = delta;
                 likelihood_ += delta;
                 int into_l = best_to_append(s, &delta);
+                DEBUG("ins into"<<langs_[into_l].str()<<" => "<<delta);
                 langs_[into_l].append(s, &delta);
                 likelihood_ += delta;
                 change += delta;
                 if(langs_[into_l].size()==1) {   // into was that empty class so append empty one
                     langs_.append(std::move(QLanguage(order_, QString::number(langs_.size()))));
                 }
-                if(fabs(change/likelihood_)<rate || change<0)
+                double r = fabs(change/likelihood_);
+                if(from_l!=into_l)
+                    DEBUG("iter="<<itr<<" | LL="<<likelihood_<<" | n_lang="<<langs_.size()<<" | rate="<<r<<" | change="<<change<<" |from "<<from_l<<" |into "<<into_l);
+                if(r<rate || change<0)
                     return itr;
-                DEBUG(itr<<","<<likelihood_<<","<<langs_.size());
             }
             return max_itr;
         }
@@ -497,6 +524,8 @@ namespace guesslang
                         *best_sample = s;
                 }
             }
+            if(delta)
+                *delta=best_val;
             return best;
         }
 
@@ -506,7 +535,8 @@ namespace guesslang
             int best = -1;
             double best_val = min_double;
             for(int i=0; i<langs_.size(); i++) {
-                double val = langs_[i].if_append(s);
+                //double val = langs_[i].if_append(s);
+                double val = langs_[i].likelihood_for(s, true);
                 //DEBUG("best_to_append "<<i<<"["<<langs_[i].size()<<"]"<<":"<<val<<":"<<langs_[i].likelihood());
                 if(val>=best_val) {
                     best = i;

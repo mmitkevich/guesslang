@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.3)
 project(guesslang)
-#SET(CMAKE_BUILD_TYPE debug)
-SET(CMAKE_BUILD_TYPE release)
-#add_definitions("-std=c++0x -ggdb -O0 -fkeep-inline-functions")
-add_definitions("-std=c++0x -O3")
+SET(CMAKE_BUILD_TYPE debug)
+#SET(CMAKE_BUILD_TYPE release)
+SET(CMAKE_BUILD_TYPE relwithdebinfo)
+add_definitions("-std=c++0x -ggdb -O0 -fkeep-inline-functions")
+#add_definitions("-std=c++0x -O2 -ggdb")
 
 aux_source_directory(. SRC_LIST)
 

@@ -7,3 +7,9 @@
 [submodule "dlibguesslang/deps/utf8proc"]
 	path = dlibguesslang/deps/utf8proc
 	url = https://github.com/JuliaLang/utf8proc.git
+[submodule "dlibguesslang/deps/cxxopt"]
+	path = dlibguesslang/deps/cxxopt
+	url = https://github.com/jarro2783/cxxopts.git
+[submodule "dlibguesslang/deps/format"]
+	path = dlibguesslang/deps/format
+	url = https://github.com/jshrake/format.git

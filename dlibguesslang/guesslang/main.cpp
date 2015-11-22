@@ -1,7 +1,7 @@
 #include "deps.h"
 #include "guesslang.h"
 #include <fstream>
-#include "utf8pp.h"
+
 
 using namespace dlib;
 using namespace guesslang;
@@ -15,34 +15,91 @@ std::function<bool(int)> regex_filter(ustring include)
 
 
 
-int test_read_n()
-{
-    typedef char char_t;
-    utf8_uifstream in("/dev/stdin");
 
-    std::cout << "Hello\n";
-    std::locale loc("en_US.UTF-8");
 
-    uchar c = u'Я';
-    bool a = utf8::isalpha(c);
-    std::cout << utf8::format("a=%d %d %d",a, c, sizeof(c))<<"\n";
-    counter cnt;
-    while(1) {
-        ustring s = read_n(in, 2, utf8::isalpha);
-        auto u8str = convert_utf32_to_utf8(s);
-        std::cout << utf8::format("\nREAD:[%s]\n", u8str.c_str());
-        cnt.push(s);
-        for(auto kv: cnt){
-            std::cout << convert_utf32_to_utf8(kv.first).c_str() << "=" << kv.second;
+QTextStream & operator<<(QTextStream &stream, QStringList &strList) {
+    stream << "[";
+    bool first = true;
+    for(auto s:strList){
+        stream << s;
+        if(first){
+            stream << ", ";
+            first = false;
         }
     }
-    return 0;
+    stream << "]";
+    return stream;
 }
 
-int main()
+int main(int argc, char* argv[])
 {
-    guesslang::counter counter(2);
-    dlib::utf8_uifstream ucin("/dev/stdin");
-    counter.read_all(ucin);
+    qStdOut() << "hello" << endl;
+
+    struct options {
+        QString training_glob;
+        QString validation_glob;
+        int k_max;
+    };
+
+    options opts;
+
+    QCommandLineParser parser;
+    parser.setApplicationDescription("GuessLang");
+    parser.addHelpOption();
+    parser.addVersionOption();
+    parser.addOption(std::move(QCommandLineOption(QStringList() << "learn" << "l", "*.learn", "*.learn")));
+    parser.addOption(std::move(QCommandLineOption(QStringList() << "validate" << "v", "*.validate", "*.validate")));
+
+
+
+    QCoreApplication app(argc, argv);
+    parser.process(app);
+
+#ifndef NDEBUG
+    for(auto opt: parser.optionNames()) {
+        qStdOut() << opt << " = " << parser.value(opt) << endl;
+    }
+#endif
+
+    QStringList learn_fns, validate_fns;
+
+    DEBUG("cwd="<<QDir::currentPath())
+
+    if(parser.isSet("learn")) {
+        learn_fns << qGlob(parser.value("learn"));
+        DEBUG("found "<< learn_fns.size() << " learn samples in "<<parser.value("learn"));
+    }
+    //if(parser.isSet("validate"))
+    //    validate_fns << qGlob(parser.value("validate"));
+
+    const int klassifier_order = 2;
+
+    guesslang::QClassifier klassifier(15);
+    for(auto fn: learn_fns) {
+        QFile file(fn);
+        file.open(QIODevice::ReadOnly);
+        QTextStream is(&file);
+        qStdOut() << "reading "<<fn<<endl;
+        QFileInfo fi(fn);
+        int n_chars;
+        do {
+            QParagraph sample(klassifier_order, guesslang::is_alpha, fi.baseName());
+            n_chars = sample.read(is,"",1000,10000);
+            if(n_chars>0)
+            {
+                klassifier.append(sample);
+                int n_itrs = klassifier.shuffle(10);
+                DEBUG("S"<<klassifier.n_samples()<<",from " << fn << " read "<<n_chars<< " chars :" << sample.str()<<" fitness "<<klassifier.likelihood()<<" n_lang "<<klassifier.size());
+                DEBUG("S"<<klassifier.n_samples()<<klassifier.str());
+
+            }
+        }while(n_chars>0);
+    }
+    //guesslang::QCounter counter(2, guesslang::is_alpha);
+
+    //dlib::utf8_uifstream ucin("/dev/stdin");
+    //QString s = QString::fromUtf8("abcdefg МИЩА");
+    //QTextStream in(&s);
+    //counter.read_all(in);
     return 0;
 }

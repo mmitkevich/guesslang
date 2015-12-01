@@ -5,7 +5,7 @@
 #ifndef GUESSLANG_CONFIG_H
 #define GUESSLANG_CONFIG_H
 
-#define DEBUG(x)  { qStdOut() << x << endl; }
+#define DEBUG(x)  { qqStdOut() << x << endl; }
 #define IF_DEBUG(x) x
 
 #endif //GUESSLANG_CONFIG_H

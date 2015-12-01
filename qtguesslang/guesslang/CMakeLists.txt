@@ -1,11 +1,14 @@
 cmake_minimum_required(VERSION 3.3)
 project(guesslang)
-#SET(CMAKE_BUILD_TYPE debug)
-SET(CMAKE_BUILD_TYPE release)
-#add_definitions("-std=c++0x -ggdb -O0 -fkeep-inline-functions")
-add_definitions("-std=c++0x -O3")
+SET(CMAKE_BUILD_TYPE debug)
+#SET(CMAKE_BUILD_TYPE release)
+add_definitions("-std=c++0x -ggdb -O0 -fkeep-inline-functions -fpermissive")
+#add_definitions("-std=c++0x -O3")
 
-aux_source_directory(. SRC_LIST)
+#aux_source_directory(. SRC_LIST)
+
+file(GLOB SRC "*.h" "*.cpp")
+file(GLOB QQ_SRC "QQ/*.h" "QQ/*.cpp")
 
 #set(CMAKE_INCLUDE_CURRENT_DIR ON)
 # Instruct CMake to run moc automatically when needed.
@@ -31,7 +34,7 @@ find_package(Qt5Core)
 #include_directories(../deps/cxxopt/src)
 #include_directories(../deps/format)
 
-add_executable(${PROJECT_NAME} ${SRC_LIST})
+add_executable(${PROJECT_NAME} ${SRC} ${QQ_SRC})
 #target_link_libraries(${PROJECT_NAME} dlib)
 #target_link_libraries(${PROJECT_NAME} utf8proc)
 target_link_libraries(${PROJECT_NAME} Qt5::Core)

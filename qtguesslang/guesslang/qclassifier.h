@@ -1,7 +1,7 @@
 #ifndef QCLASSIFIER_H
 #define QCLASSIFIER_H
 
-
+#include <functional>
 #include "QQ/qqmatrix.h"
 
 const double min_double = -1e10;
@@ -12,9 +12,9 @@ const double min_likelihood = -1e50;
 /// $ln P(S|L) = \sum T(w_1..w_j,S)*\frac{T(w_1..w_j,L)+1}{T(w_1..w_{j-1},L)+m(L)}$
 /// m(L) = number of distinct characters in L
 /// j = j-gram length, e.g. for j=2 we analyze P(ab|a)
-template<typename P, typename L>
-double inline laplace_likelihood_estimate(P& s, L& l, int alphabet_size) {
+double inline laplace_likelihood_estimate(QParagraph& s, QParagraph& l) {
     double lprob = 0.;
+    int alphabet_size = l[1].size();
     if(alphabet_size==0)
         return min_likelihood;
     for(auto it: items(s[2])) {
@@ -59,8 +59,16 @@ public:
         return centroids_;
     }
 
+    T& centroid(int i) {
+        return centroids_[i];
+    }
+
     const QVector<T>& samples() const {
         return samples_;
+    }
+
+    T& sample(int i) {
+        return samples_[i];
     }
 
     /// distance from sample to centroid
@@ -111,30 +119,35 @@ template<typename T>
 class QKMedoidsClassifier : public QClassifier<T>, public QQMatrix<double, QQVectorMatrixData<double>>
 {
 public:
+    typedef QQMatrix<double, QQVectorMatrixData<double>> Matrix;
+    typedef std::function<double(T&, T&)> Distance;
 
-    QKMedoidsClassifier(int n_centroids) : QQMatrix(0, n_centroids) {
-        max_iterations_ = 1000;
-        min_convergence_rate_ = 1e-3;
+    QKMedoidsClassifier(int n_centroids, Distance distance):
+        QQMatrix(0, n_centroids),
+        max_iterations_(1000),
+        min_convergence_rate_(1e-3),
+        distance_(distance) {
     }
 
-    int append(const QVector<T>& vec) {
+    int append(QVector<T>&& vec) {
         int cnt = 0;
         for(T it: vec) {
-            append(it);
+            append(std::move(it));
             ++cnt;
         }
         return cnt;
     }
 
     /// insert paragraph into language maximizing likelihood
-    int append(const T &sample) {
+    int append(T &&sample) {
+        for(int ic=0; ic<nc(); ic++)
+            at(nr(), ic) = laplace_likelihood_estimate(sample, centroid(ic));
 
         return 0;
     }
 
-    /// return likelihood (log-probability) that sample s belongs to cluster c
-    double likelihood(int s, int c) {
-        return (*this)(s, c);
+    double likelihood(int is, int ic) {
+        return 0;
     }
 
     double likelihood() {
@@ -147,6 +160,7 @@ public:
 private:
     int max_iterations_;
     double min_convergence_rate_;
+    Distance distance_;
 };
 
 

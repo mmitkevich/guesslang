@@ -11,11 +11,57 @@ public:
     //typedef QHash<QString, int> Dict;
     //typedef Dict::iterator iterator;
     //typedef Dict::const_iterator const_iterator;
+    typedef QMap<T,int> Map;
 
     /// counts character sequences
-    QCounter():
-        total_(0)
+    QCounter(int order=-1):
+        total_(0),
+        order_(order)
     {
+    }
+
+    QCounter(const QCounter &other):
+        Map(other),
+        order_(other.order_)
+    {
+        Q_ASSERT(order_==other.order_);
+        other.check();
+        check();
+    }
+
+    QCounter(QCounter &&other) {
+        Q_ASSERT(order_==other.order_);
+        other.check();
+        swap(other);
+    }
+
+    void swap(QCounter &other) {
+        Q_ASSERT(order_==other.order_);
+        other.check();
+        Map::swap(other);
+        qSwap(order_, other.order_);
+        check();
+    }
+
+    void check() const{
+#ifdef DEBUG3
+        for(auto it=Map::begin();it!=Map::end();it++){
+            T k = it.key();
+            if(order_!=k.size()) {
+                Q_ASSERT(0);
+            }
+        }
+#endif
+    }
+
+    QCounter &operator=(const QCounter &other) {
+        Q_ASSERT(order_==other.order_);
+        other.check();
+        check();
+        Map::operator =(other);
+        order_ = other.order_;
+        check();
+        return *this;
     }
 
     /// probability of charcter sequence
@@ -25,23 +71,38 @@ public:
 
     /// add other counter into this counter
     QCounter& operator+=(const QCounter &other) {
-        for(auto it: items(other)) {
-            increment(it.key(), it.value());
+        check();
+        other.check();
+        for(auto it=other.begin(); it!=other.end(); it++) {
+            const auto &k = it.key();
+            const auto &v = it.value();
+            increment(k, v);
         }
+        check();
         return *this;
     }
 
+
     QCounter operator+(const QCounter &other) const {
+        check();
+        other.check();
         QCounter result = *this;
+        result.check();
         result+=other;
+        result.check();
         return result;
     }
 
     /// subtract rhs counter from this counter
     QCounter& operator-=(const QCounter &other) {
-        for(auto it: items(other)) {
-            increment(it.key(), -it.value());
+        other.check();
+        check();
+        for(auto it=other.begin(); it!=other.end(); it++) {
+            auto k = it.key();
+            auto v = it.value();
+            increment(k, -v);
         }
+        check();
         return *this;
     }
 
@@ -52,15 +113,26 @@ public:
     }
 
     /// increment counter for sequence specified
-    int increment(T& w, int n=1) {
-        //DEBUG("inc " << s)
+    int increment(const T& w, const int n=1) {
+        //DEBUG("inc " << dumps(*this));
         total_ += n;
-        (*this)[w] += n;
-        auto v = (*this)[w];
-        if(v==0) {
+        int a = Map::value(w, 0);
+#ifdef DEBUG3
+        check();
+        if(order_!=-1) {
+            Q_ASSERT(order_==w.length());
+            if(Map::size()>0) {
+                const T &kk = Map::firstKey();
+                Q_ASSERT(kk.size()==w.size());
+            }
+        }
+#endif
+        (*this)[w] = a + n;
+        if(a+n == 0) {
             QMap<QString,int>::remove(w);
         }
-        return v;
+        check();
+        return a+n;
     }
 
     int total() const {
@@ -68,6 +140,7 @@ public:
     }
 private:
     int total_;
+    int order_;
 };
 
 

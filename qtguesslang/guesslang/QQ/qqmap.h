@@ -46,14 +46,13 @@ inline QHash<K,T>& operator<<(QHash<K,T> &lval, const QPair<K,T> &pair) {
 
 template<class Map>
 struct QQItems {
-    typedef typename Map::iterator Iterator;
-    typedef typename Map::const_iterator ConstIterator;
+    typedef typename Map::const_iterator Iterator;
     typedef typename Map::mapped_type value_type;
     typedef typename Map::key_type key_type;
 
-    Map &map_;
+    const Map &map_;
 
-    QQItems(Map & map_) : map_(map_) {}
+    QQItems(const Map & map_) : map_(map_) {}
 
     struct iterator {
         Iterator mapIterator;
@@ -70,48 +69,33 @@ struct QQItems {
         }
     };
 
-    struct const_iterator {
-        ConstIterator mapIterator;
-        const_iterator(const ConstIterator &mapIterator_): mapIterator(mapIterator_) {}
-        ConstIterator operator*() {
-            return mapIterator;
-        }
-        iterator & operator++() {
-            ++mapIterator;
-            return *this;
-        }
-        bool operator!=(const const_iterator & other) {
-            return this->mapIterator != other.mapIterator;
-        }
-    };
-
-    int size() {
+    int size() const {
         return map_.size();
     }
 
-    const value_type &operator[](const key_type& key) {
+    const value_type &operator[](const key_type& key) const {
         return map_[key];
     }
 
-    iterator begin() {
-        return map_.begin();
-    }
-
-    iterator end() {
-        return map_.end();
-    }
-
-    const_iterator cbegin() {
+    iterator begin() const {
         return map_.cbegin();
     }
 
-    const_iterator cend(){
+    iterator end() const {
+        return map_.cend();
+    }
+
+    iterator cbegin() const {
+        return map_.cbegin();
+    }
+
+    iterator cend() const {
         return map_.cend();
     }
 };
 
 /// for(auto it = items(myQmap)) cout << it.key() << "->" << it.value()
-template<class Map> QQItems<Map> items(Map & map) {
+template<class Map> QQItems<Map> qqitems(Map & map) {
     return QQItems<Map>(map);
 }
 

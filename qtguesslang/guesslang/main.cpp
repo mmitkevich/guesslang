@@ -56,11 +56,11 @@ int main(int argc, char* argv[])
         learn_fns << validate_fns;
 
         const int klassifier_order = 2;
-        const int max_lang = 15;
+        const int max_lang = 5;
         const int max_shuffle = 10;
         const int nlsep = 1; // number of newlines in row to separate sampmles. 1=\n, 0=off, 2=\n\n
 
-        QKMedoidsClassifier<QParagraph> klassifier(max_lang, laplace_likelihood_estimate);
+        QKMedoidsClassifier<QParagraph> klassifier(max_lang, QParagraph(klassifier_order), laplace_likelihood_estimate);
         for(auto fn: learn_fns) {
             QFile file(fn);
             QFileInfo fi(fn);
@@ -69,7 +69,7 @@ int main(int argc, char* argv[])
             //qStdOut() << "reading " << fn << "\n";
             QVector<QParagraph> samples;
             int n_samples = QParagraph::read_all(is, samples, klassifier_order, QParagraph::is_alpha, 0, 1000, 10000);
-            klassifier.append(std::move(samples));
+            klassifier.append(std::move(samples), fi.baseName());
             klassifier.shuffle();
             int n_itrs = 0;// klassifier.shuffle(max_shuffle);
             DEBUG(QString("S%1 | %2(%3) | ll=%4 | k=%5") % klassifier.samples().size() % fi.baseName() % n_samples

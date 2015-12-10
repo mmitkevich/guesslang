@@ -6,9 +6,9 @@
 #include <algorithm>
 //#include <memory>
 
+#include "QQ/QQ.h"
 #include <QtCore>
 #include <QtCore/QSharedData>
-#include "QQ/QQ.h"
 
 
 #endif //GUESSLANG_DEPS_H

@@ -175,16 +175,16 @@ public:
     using Klass::sample_labels_;
     using Klass::centroid;
     using Klass::sample;
-    QKMedoidsClassifier(int max_centroids, const QParagraph& c, Estimate estimate):
+    QKMedoidsClassifier(int max_centroids, const T& p, Estimate estimate, int max_iterations=10):
         QQMatrix(0, max_centroids),
-        max_iterations_(300),
+        max_iterations_(max_iterations),
         min_convergence_rate_(1e-3),
         estimate_(estimate)
     {
         centroid_size_.fill(0, max_centroids);
-        c.check();
+        p.check();
         for(int i=0;i<max_centroids;i++)
-            centroids_.append(QParagraph(2));
+            centroids_.append(p);
     }
 
     int append(QVector<T>&& vec, const QString& label = QString()) {
@@ -220,7 +220,8 @@ public:
         T &s = sample(is);
         for(int kc=0; kc<nc(); kc++)
         if(kc!=jc) {
-            ests.set(0, kc, estimate_(s, centroid(kc)));
+            T c = centroid(kc);
+            ests.set(0, kc, estimate_(s, c));
         }
         T c = centroid(jc);
         c.check();
@@ -236,21 +237,28 @@ public:
         return ests;
     }
 
-    Matrix find_best_estimates(int is, int &ic, double& max_likelihood) {
+    Matrix find_best_estimates(int is, int &ic, double& fit) {
         Matrix best(1, nc());
 //#if 1
         int jc; // target centroid
+        int ic0 = ic;
         ic = rand() % nc(); // if nothing more useful
-        max_likelihood = min_likelihood;
-        for(jc=0; jc<nc(); jc++) {
+        double fit0 = fit;
+        if(ic<0)
+            fit = min_likelihood;
+        for(jc=0; jc<nc(); jc++)
+        if(jc!=ic0)
+        {
             Matrix ests = calc_estimates_if_add(is, jc);
             auto max_est = ests.max();
-            auto fit = ests[jc]-max_est;
+            auto fit1 = ests[jc]-max_est;
 #ifdef DEBUG4
-            qqStdOut() << QString("find_best_est1(s=%1,c=%2,f=%3,mf=%4)") % is % jc % fit % max_est << " | "<<ests;
+            qqStdOut() << QString("if(s=%1)from(c=%2)into(c=%3)then(f=%4)willbe(f=%5)") % is % ic0 % jc % fit0 % fit1 << " | "<<ests<<" | oldsizes "<<dumps(centroid_size_)<<"\n";
+            qqStdOut().flush();
 #endif
-            if(fit>max_likelihood) {
-                max_likelihood = fit;
+            if(fit1-fit0>fit-fit0) {
+
+                fit = fit1;
                 ic = jc;
                 best = ests;
             }
@@ -268,13 +276,11 @@ public:
         }
     }
 
-    int assign_centroid(int is, int &ic, double &fit){
-        fit = min_likelihood;
+    bool assign_centroid(int is, int &ic, double &fit){
+        //qqStdOut() << "assign_centroid("<<is<<","<<ic<<"), centroids: " << dumps(centroid_size_);
         int ic0 = ic;
-
-        qqStdOut() << "assign_centroid("<<is<<","<<ic<<"), centroids: " << dumps(centroid_size_);
-
-        Matrix ests = (ic<0) ? find_best_estimates(is, ic, fit) : calc_estimates_if_add(is, ic);
+        //Matrix ests = (ic<0) ? find_best_estimates(is, ic, fit) : calc_estimates_if_add(is, ic);
+        Matrix ests = find_best_estimates(is, ic, fit);
         Q_ASSERT(ic>=0);
         Q_ASSERT(ic<nc());
         T c = centroid(ic);
@@ -288,12 +294,10 @@ public:
         qqStdOut() << "MATRIX:\n" << (Matrix&)*this;
 #endif
         // put sample into the priority queue, ordered by l_{c(s)}(s) - max_{c} l(s, c)
-        //fit =  at(is, ic) - max_likelihood;
-        //samples_queue_.insert(fit, is);
+        samples_queue_.insert(fit, is);
         sample_centroid_[is] = ic;
-        qqStdOut() << QString("assign(fit=%1,s=%2,c=%3)") % fit % is % ic << "\n";
-
-        return ic0;
+        //qqStdOut() << QString("assign(fit=%1,s=%2,c=%3)") % fit % is % ic << "\n";
+        return ic0!=ic;
     }
 
     double likelihood(int is, int ic) {
@@ -305,11 +309,20 @@ public:
     }
 
     /// shuffle samples between centroids and return if the shuffle increased likelihood
-    bool shuffle() {
+    int shuffle() {
+        int ntotalshuffles=0;
         for(int ii=0; ii<max_iterations_; ii++) {
+            int nshuffled = 0;
+            //            qqStdOut() << "iter "<<ii;
             // take sample from the priority queue
-            //int is = samples_queue_.take(samples_queue_.firstKey());
-            for(int is=0;is<samples_.size();is++) { // go and try moving all the samples
+            for(auto iq = samples_queue_.begin(); iq!=samples_queue_.end();) {
+                //int is = samples_queue_.take(samples_queue_.firstKey());
+                int is = iq.value();
+                double fit = iq.key();
+#ifdef DEBUG4
+                qqStdOut() << "move "<<is <<"("<<fit<<")\n";
+#endif
+            //for(int is=0;is<samples_.size();is++) { // go and try moving all the samples
                 /// to be changed:
                 /// sample_centroid_[is]
                 int ic = sample_centroid_[is];
@@ -319,22 +332,30 @@ public:
                 T c = centroid(ic);
                 c.check();
                 //T c = centroid(ic);
+                iq = samples_queue_.erase(iq);
 
                 const T &s = sample(is);
                 c -= s;
                 centroid_size_[ic]-=1;
                 calc_estimates(ic);
+                int ic0 = ic;
+                double fit0 = fit;
+                assign_centroid(is, ic, fit);    // assigns best centroid
+                double rate = fit/fit0;
+                if(ic!=ic0 && rate>1.0+1e-3) {
+                    nshuffled++;
+#ifdef DEBUG4
+                    qqStdOut() << QString("shuffle(s=%1,c=%2->%3)") % is % ic0 % ic << "\n";
+                    qqStdOut().flush();
+#endif
+                }
 
-                double fit = min_likelihood;
-                ic = -1;
-                int ic0 = assign_centroid(is, ic, fit);    // assigns best centroid
-                qqStdOut() << QString("shuffle(s=%1,c=%2->%3)") % is % ic0 % ic << "\n";
-                qqStdOut().flush();
-                if(ic!=ic0)
-                    return true;    // shuffled something
             }
+            ntotalshuffles+=nshuffled;
+            if(nshuffled==0)
+                break;
         }
-        return false;
+        return ntotalshuffles;
     }
 private:
     int max_iterations_;

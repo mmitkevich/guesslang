@@ -56,11 +56,11 @@ int main(int argc, char* argv[])
         learn_fns << validate_fns;
 
         const int klassifier_order = 2;
-        const int max_lang = 5;
-        const int max_shuffle = 10;
+        const int max_lang = 10;
+        const int max_shuffle = 50;
         const int nlsep = 1; // number of newlines in row to separate sampmles. 1=\n, 0=off, 2=\n\n
 
-        QKMedoidsClassifier<QParagraph> klassifier(max_lang, QParagraph(klassifier_order), laplace_likelihood_estimate);
+        QKMedoidsClassifier<QParagraph> klassifier(max_lang, QParagraph(klassifier_order), laplace_likelihood_estimate, max_shuffle);
         for(auto fn: learn_fns) {
             QFile file(fn);
             QFileInfo fi(fn);

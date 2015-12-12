@@ -5,13 +5,13 @@
 
 /// character probabilities
 template<typename T>
-class QCounter : public QMap<T, int>
+class QCounter : public QHash<T, int>
 {
 public:
     //typedef QHash<QString, int> Dict;
     //typedef Dict::iterator iterator;
     //typedef Dict::const_iterator const_iterator;
-    typedef QMap<T,int> Map;
+    typedef QHash<T,int> Map;
 
     /// counts character sequences
     QCounter(int order=-1):
@@ -20,7 +20,7 @@ public:
     {
     }
 
-    QCounter(const QCounter &other):
+    /*QCounter(const QCounter &other):
         Map(other),
         order_(other.order_)
     {
@@ -33,12 +33,13 @@ public:
         Q_ASSERT(order_==other.order_);
         other.check();
         swap(other);
-    }
+    }*/
 
     void swap(QCounter &other) {
         Q_ASSERT(order_==other.order_);
         other.check();
         Map::swap(other);
+        qSwap(total_, other.total_);
         qSwap(order_, other.order_);
         check();
     }
@@ -54,7 +55,7 @@ public:
 #endif
     }
 
-    QCounter &operator=(const QCounter &other) {
+/*    QCounter &operator=(const QCounter &other) {
         Q_ASSERT(order_==other.order_);
         other.check();
         check();
@@ -63,7 +64,7 @@ public:
         check();
         return *this;
     }
-
+*/
     /// probability of charcter sequence
     double probability(const T &s) {
         return double(value(s, 0)) / total_;
@@ -129,7 +130,7 @@ public:
 #endif
         (*this)[w] = a + n;
         if(a+n == 0) {
-            QMap<QString,int>::remove(w);
+            Map::remove(w);
         }
         check();
         return a+n;

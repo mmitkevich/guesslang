@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.3)
 project(guesslang)
 SET(CMAKE_BUILD_TYPE debug)
 #SET(CMAKE_BUILD_TYPE release)
-add_definitions("-std=c++0x -ggdb -O0 -fkeep-inline-functions  -DQT_FORCE_ASSERTS")
+add_definitions("-std=c++0x -ggdb")
+#add_definitions("-O0 -fkeep-inline-functions  -DQT_FORCE_ASSERTS")
 #-fpermissive
 #add_definitions("-std=c++0x -O3")
 

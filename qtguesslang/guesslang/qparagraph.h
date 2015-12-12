@@ -4,7 +4,7 @@
 
 #include <QtCore/QSharedData>
 #include <QtCore/QSharedDataPointer>
-#include <QtCore/QMap>
+#include <QtCore/QHash>
 
 #include "qcounter.h"
 

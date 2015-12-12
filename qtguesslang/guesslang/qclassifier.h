@@ -20,10 +20,16 @@ double inline laplace_likelihood_estimate(const QParagraph& s, const QParagraph&
     int alphabet_size = l[1].size();
     if(alphabet_size==0)
         return min_likelihood;
-    for(auto it=s[2].begin(); it!=s[2].end(); it++) { //: qqitems(s[2])
-        auto w = it.key();  // 2-ngram
+    const auto & l2 = l[2];
+    const auto & l1 = l[1];
+
+    for(auto it: qqitems(s[2])) { //=s[2].begin(); it!=s[2].end(); it++) { //: qqitems(s[2])
+        const auto &w = it.key();  // 2-ngram
         auto cnt = it.value();
-        lprob += double(cnt) * double(l[2][w] + 1) / double(l[1][w] + alphabet_size);
+        //auto cnt = s[2][w];
+        auto c2 = l2[w];
+        auto c1 = l1[w.right(1)];
+        lprob += double(cnt) * double(c2 + 1) / double(c1 + alphabet_size);
     }
 #ifdef DEBUG4
     qqStdOut() << "laplace_estimate (" << s << "," << l << "," << alphabet_size << ")->"<<lprob<<"\n";
@@ -175,6 +181,7 @@ public:
     using Klass::sample_labels_;
     using Klass::centroid;
     using Klass::sample;
+    using Klass::sample_centroid;
     QKMedoidsClassifier(int max_centroids, const T& p, Estimate estimate, int max_iterations=10):
         QQMatrix(0, max_centroids),
         max_iterations_(max_iterations),
@@ -197,38 +204,35 @@ public:
     }
 
     /// insert paragraph into language maximizing likelihood
-    int append(T &&sample, const QString& label = QString(), int c = -1) {
-        //if(c==-1)
-        //    c = rand() % nc();        // add to random centroid
-
+    int append(T &&sample, const QString& label = QString()) {
         int is = nr();
         samples_.append(sample);
-        sample_centroid_.resize(is+1);
+        sample_centroid_.append(-1);
         if(label.length())
             sample_labels_[is] = label;
         resize(is+1);
-        //row(nc());
-        double fit = min_likelihood;
-        assign_centroid(is, c, fit);
+        double dfiti = 0.;
+        int ic = assign_centroid(is, dfiti);
+        //qqStdOut() << "enqueue "<<is<<" with "<<(-dfiti)<<"\n";
+        //samples_queue_.insert(-dfiti, is);
         shuffle();
         return is;
     }
 
-    Matrix calc_estimates_if_add(int is, int jc) {
+/*    Matrix calc_estimates_if_add(int ts, int jc, int is) {
         Q_ASSERT(jc<nc());
         Matrix ests(1, nc());   // l(is,kc);
-        T &s = sample(is);
         for(int kc=0; kc<nc(); kc++)
         if(kc!=jc) {
             T c = centroid(kc);
-            ests.set(0, kc, estimate_(s, c));
+            ests.set(0, kc, estimate_(sample(ts), c));
         }
         T c = centroid(jc);
         c.check();
         Q_ASSERT(c.order()==2);
-        c +=s;
+        c += sample(is);
         c.check();
-        ests.set(0, jc, estimate_(s, c));
+        ests.set(0, jc, estimate_(sample(ts), c));
 #if 0
         qqStdOut() << QString("calc_est_if_add(%1,%2)") % is % jc
                    << "->" << ests <<"|\n";
@@ -249,9 +253,28 @@ public:
         for(jc=0; jc<nc(); jc++)
         if(jc!=ic0)
         {
-            Matrix ests = calc_estimates_if_add(is, jc);
-            auto max_est = ests.max();
-            auto fit1 = ests[jc]-max_est;
+            double fit1 = 0.;
+            Matrix ests(1, nc());   // l(is,kc);
+            for(int kc=0; kc<nc(); kc++)
+            if(kc!=jc) {
+                T c = centroid(kc);
+                ests.set(0, kc, estimate_(sample(ts), c));
+            }
+            T c = centroid(jc);
+            c.check();
+            Q_ASSERT(c.order()==2);
+            c += sample(is);
+            c.check();
+
+            ests.set(0, jc, estimate_(sample(ts), c));
+
+            for(int ts=0; ts<nr(); ts++)
+            if(js!=is && sample_centroid(js)==ic0) {
+                Matrix ests = calc_estimates_if_add(ts, jc, is);
+                auto max_est = ests.max();
+                fit1 += ests[jc]-max_est;
+            }
+            // and all other samples affected by addition
 #ifdef DEBUG4
             qqStdOut() << QString("if(s=%1)from(c=%2)into(c=%3)then(f=%4)willbe(f=%5)") % is % ic0 % jc % fit0 % fit1 << " | "<<ests<<" | oldsizes "<<dumps(centroid_size_)<<"\n";
             qqStdOut().flush();
@@ -275,30 +298,117 @@ public:
             at(is,ic) = estimate_(sample(is),centroid(ic));
         }
     }
+*/
+    double update_estimates(Matrix& ests, int is, int kc, double e) {
+        auto e0 = normalized_estimates(*this, is, kc);
+        ests.set(is, kc, e);
+        auto e1 = normalized_estimates(ests, is, kc);
+        return e1-e0;
+    }
 
-    bool assign_centroid(int is, int &ic, double &fit){
-        //qqStdOut() << "assign_centroid("<<is<<","<<ic<<"), centroids: " << dumps(centroid_size_);
-        int ic0 = ic;
-        //Matrix ests = (ic<0) ? find_best_estimates(is, ic, fit) : calc_estimates_if_add(is, ic);
-        Matrix ests = find_best_estimates(is, ic, fit);
-        Q_ASSERT(ic>=0);
-        Q_ASSERT(ic<nc());
-        T c = centroid(ic);
-        c.check();
-        c += sample(is);
-        c.check();
-        setrow(is, ests);
-        centroid_size_[ic]++;
-        calc_estimates(ic); // updates estimates that changed
+    double normalized_estimates(Matrix &ests, int is, int kc) {
+        return ests.at(is, kc) - ests.row(is).max();
+    }
+
+    int takefrom_centroid(double &dfitr) {
+        int is_best = -1;
+        Matrix best = *this;
+        dfitr = 0.;
+        is_best = nr()-1;
+        for(int is=0; is<nr(); is++) {
+            int ic = sample_centroid(is);
+            Q_ASSERT(ic!=-1);
+            // removed from ic affects all in ic
+            auto c = centroid(ic);
+            auto& s = sample(is);
+            auto cminus = c - s;//centroid(ic0)-sample(is);
+            double dfit = 0.;
+            Matrix ests = *this;        // let's calc new ests
+            for(int js=0; js<nr(); js++) {  // update all samples in the cluster
+                if(sample_centroid(js) == ic) {
+                    auto e = estimate_(sample(js), cminus);
+                    auto f = update_estimates(ests, js, ic, e);
+                    dfit += f;
+                }
+            }
+            if(dfit>dfitr) {
+                dfitr = dfit;
+                is_best = is;
+            }
+        }
+
+        if(is_best!=-1) {
+            copy_from(best);
+            int ic_best = sample_centroid(is_best);
+            sample_centroid_[is_best] = -1;
+            centroid_size_[ic_best] -=1;
+            centroid(ic_best) -= sample(is_best);
+
+            qqStdOut() << QString("takefrom(S%1, L%2, dfit=%3)") % is_best % ic_best % dfitr << "\n";
+        }
+        return is_best;
+    }
+
+    /// return new centroid assigned
+    /// updates dfiti to increment in the fitness
+    int assign_centroid(int is, double &dfiti){
+        Q_ASSERT(sample_centroid(is)==-1);
+        Matrix best = *this;
+        auto& s = sample(is);
+        dfiti = min_likelihood;
+        int ic_best = -1;
+
+        for(int jc=0; jc<nc(); jc++)    // look through target centroids
+        //        if(jc!=ic0)                 // different from current
+        {
+            Matrix ests = *this;        // let's calc new ests
+            double dfit = 0.;
+
+            auto cplus = centroid(jc)+sample(is);
+
+            // appended into jc
+            auto e = estimate_(sample(is), cplus);
+            auto f = update_estimates(ests, is, jc, e);    // added to target
+
+            dfit += f;
+
+            // new sample affects estimates for all samples in the target centroid
+            for(int js=0; js<nr(); js++) {
+                if(sample_centroid(js)==jc) {
+                    e = estimate_(sample(js), cplus);
+                    f = update_estimates(ests, js, jc, e);
+                    dfit += f;
+                }
+            }
+
+            if(ic_best<0 || dfit>dfiti) {
+                dfiti = dfit;
+                ic_best = jc;
+                best = ests;
+            }
+        }
+        if(ic_best!=-1) {
+            copy_from(best);
+            sample_centroid_[is] = ic_best;
+            centroid_size_[ic_best]+=1;
+            centroid(ic_best) += s;
+        }
+
+
 #if DEBUG2
         qqStdOut() << "MATRIX:\n" << (Matrix&)*this;
 #endif
-        // put sample into the priority queue, ordered by l_{c(s)}(s) - max_{c} l(s, c)
-        samples_queue_.insert(fit, is);
-        sample_centroid_[is] = ic;
-        //qqStdOut() << QString("assign(fit=%1,s=%2,c=%3)") % fit % is % ic << "\n";
-        return ic0!=ic;
+        qqStdOut() << QString("assign(S%1, L%2, dfit=%3)") % is % ic_best % dfiti << "\n";
+        static int flushcnt = 0;
+        if(++flushcnt>1000) {
+            qqStdOut().flush();
+            flushcnt=0;
+        }
+
+        return ic_best;
     }
+
+
 
     double likelihood(int is, int ic) {
         return 0;
@@ -310,52 +420,30 @@ public:
 
     /// shuffle samples between centroids and return if the shuffle increased likelihood
     int shuffle() {
-        int ntotalshuffles=0;
+        int nshuff = 0;
         for(int ii=0; ii<max_iterations_; ii++) {
             int nshuffled = 0;
             //            qqStdOut() << "iter "<<ii;
             // take sample from the priority queue
-            for(auto iq = samples_queue_.begin(); iq!=samples_queue_.end();) {
+            //for(auto iq = samples_queue_.begin(); iq!=samples_queue_.end();) {
+            //auto is = samples_queue_.take(samples_queue_.firstKey());
                 //int is = samples_queue_.take(samples_queue_.firstKey());
-                int is = iq.value();
-                double fit = iq.key();
-#ifdef DEBUG4
-                qqStdOut() << "move "<<is <<"("<<fit<<")\n";
-#endif
-            //for(int is=0;is<samples_.size();is++) { // go and try moving all the samples
-                /// to be changed:
-                /// sample_centroid_[is]
-                int ic = sample_centroid_[is];
+                //int is = iq.value();
+                //double normfit = iq.key();
+                //int is = sample_centroid(is);
+                //int ic0 = ic;
+                double dfiti = min_likelihood, dfitr = min_likelihood;
+                int is = takefrom_centroid(dfitr);      // remove from centroid who would loose most of fitness then
+                Q_ASSERT(is!=-1);
+                int ic = assign_centroid(is, dfiti);    // assign to centroid who would gain most of fitness then
+                Q_ASSERT(ic!=-1);
 
-                // remove from centroid & update changed likelihoods
-                //T c;
-                T c = centroid(ic);
-                c.check();
-                //T c = centroid(ic);
-                iq = samples_queue_.erase(iq);
-
-                const T &s = sample(is);
-                c -= s;
-                centroid_size_[ic]-=1;
-                calc_estimates(ic);
-                int ic0 = ic;
-                double fit0 = fit;
-                assign_centroid(is, ic, fit);    // assigns best centroid
-                double rate = fit/fit0;
-                if(ic!=ic0 && rate>1.0+1e-3) {
-                    nshuffled++;
-#ifdef DEBUG4
-                    qqStdOut() << QString("shuffle(s=%1,c=%2->%3)") % is % ic0 % ic << "\n";
-                    qqStdOut().flush();
-#endif
-                }
-
-            }
-            ntotalshuffles+=nshuffled;
-            if(nshuffled==0)
-                break;
+                if(dfitr+dfiti<1e-3)
+                    break;
+                // put sample into the priority queue, ordered by l_{c(s)}(s) - max_{c} l(s, c)
+       //         samples_queue_.insert(-dfiti, is);
         }
-        return ntotalshuffles;
+        return nshuff;
     }
 private:
     int max_iterations_;

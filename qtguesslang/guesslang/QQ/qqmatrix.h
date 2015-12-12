@@ -367,6 +367,11 @@ public:
         return range_.shape();
     }
 
+    QQMatrix& copy_from(const QQMatrix &other) {
+        *this = other;
+        return *this;
+    }
+
     QQMatrix& operator=(const QQMatrix &other) {
         Q_ASSERT(nr()==other.nr());
         Q_ASSERT(nc()==other.nc());
@@ -420,6 +425,10 @@ public:
 
     void resize(int nr, int nc=-1) {
         d->resize(nr, nc);
+        if(nr-1>=range_.rb.r)
+            range_.rb.r = nr-1;
+        if(nc-1>=range_.rb.c)
+            range_.rb.c = nc-1;
     }
 
     QQMatrix<T,D> row(int i) {

@@ -8,7 +8,7 @@ QTextStream& qStdOut() {
 
 
 QStringList qGlob(const QString& pattern) {
-    DEBUG("qGlob " << pattern)
+    DEBUG("qGlob " << pattern);
     QFileInfo fi(pattern);
     QDirIterator it(fi.dir().absolutePath(), QStringList() << fi.fileName(), QDir::Files);
     QStringList filepaths;

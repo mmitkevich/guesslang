@@ -15,7 +15,7 @@ namespace guesslang
         return static_cast<V>(d);
     }
 
-    const double min_double = -1e10;
+    const double min_double = -1e50;
 
     template<typename T> bool True(const T& arg) { return true; }
 
@@ -188,7 +188,7 @@ namespace guesslang
         double condi_logproba(QString f) {
             Q_ASSERT(f.size()==order_);
             auto m = prefix_.size();
-            return (full_[f]+1)/(prefix_[f.right(1)]+m);
+            return (full_[f]+1)/(prefix_[f.left(1)]+m);
         }
 
         const QCounter& full() const {
@@ -222,7 +222,7 @@ namespace guesslang
         return stream;
     }
 
-    const double min_likelihood = -1e5;
+    const double min_likelihood = -1e50;
 
     /// language is set of paragraph samples
     ///
@@ -234,7 +234,7 @@ namespace guesslang
 
         QLanguage(int order = 2, const QString &label=QString()):
             QParagraph(order, True<QChar>, label),
-            likelihood_(min_likelihood)
+            likelihood_(0)
         {
 
         }
@@ -256,7 +256,7 @@ namespace guesslang
                 int full_cnt = 0, prefix_cnt = 0;
                 for(const auto &ls: samples) {
                     full_cnt += ls.full()[w];
-                    prefix_cnt += ls.prefix()[w.right(1)];
+                    prefix_cnt += ls.prefix()[w.left(1)];
                 }
                 lprob += double(cnt) * double(full_cnt + 1) / double(prefix_cnt + m);
             }
@@ -273,7 +273,7 @@ namespace guesslang
 
 
         double static calc_likelihood(const QList<QParagraph>& samples1, int m) {
-            double llh = min_likelihood;
+            double llh = 0.;//min_likelihood;
             //DEBUG("calc_likelihood(n_samples="<<samples1.size()<<")")
             if(samples1.size()>0) {
                 //auto alphabet = union_alphabet(samples1);
@@ -336,7 +336,7 @@ namespace guesslang
         }
 
         /// \returns index of what sample to remove to ge maximum likelihood increase
-        int best_to_remove1(double *delta = nullptr) const {
+        int best_to_remove(double *delta = nullptr) const {
             int best = -1;
             double best_value = min_double;
             for(int i=0; i<samples_.size(); i++) {
@@ -351,7 +351,7 @@ namespace guesslang
             return best;
         }
 
-        int best_to_remove(double *delta = nullptr) const {
+        int best_to_remove2(double *delta = nullptr) const {
             int best = -1;
             double best_value = min_double;
             for(int i=0; i<samples_.size(); i++) {
@@ -430,7 +430,7 @@ namespace guesslang
     {
     public:
         QClassifier(int order, int max_lang=50):
-            likelihood_(min_likelihood),
+            likelihood_(0.),
             id_(0),
             n_samples_(0),
             max_lang_(max_lang),

@@ -92,17 +92,19 @@ int main(int argc, char* argv[])
         int n_chars;
         do {
             QParagraph sample(klassifier_order, guesslang::is_alpha, fi.baseName());
-            n_chars = sample.read(is,"",100,1000);
+            n_chars = sample.read(is,"",1000,3000);
             if(n_chars>0)
             {
                 klassifier.append(sample);
-                int n_itrs = klassifier.shuffle(50);
+                int n_itrs = klassifier.shuffle(15);
                 DEBUG("S"<<klassifier.n_samples()<<" | " << fi.baseName() << " | "<<n_chars<< " chr | " << sample.str()<<" | LL="<<klassifier.likelihood()<<" | n_lang "<<klassifier.size()<<" | n_learn "<<fns.size()-validate_fns.size()<<" | n_validate "<<validate_fns.size());
                 DEBUG(klassifier.str());
 
             }
         }while(n_chars>0);
     }
+    qStdOut() << klassifier.str();
+
     //guesslang::QCounter counter(2, guesslang::is_alpha);
 
     //dlib::utf8_uifstream ucin("/dev/stdin");

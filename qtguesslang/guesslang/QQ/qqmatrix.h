@@ -488,6 +488,9 @@ public:
     }
 
     void set(int irow, int icol, const T&value)  {
+        if(std::isnan(value)){
+            throw std::bad_exception();
+        }
         d->set(range_.lt+QQIndex2(irow, icol), value);
     }
 

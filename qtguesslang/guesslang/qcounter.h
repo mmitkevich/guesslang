@@ -53,6 +53,9 @@ public:
             }
         }
 #endif
+        if(total_<0)
+            throw std::bad_exception();
+
     }
 
 /*    QCounter &operator=(const QCounter &other) {
@@ -130,7 +133,7 @@ public:
 #endif
         (*this)[w] = a + n;
         if(a+n == 0) {
-            Map::remove(w);
+            //Map::remove(w);
         }
         check();
         return a+n;

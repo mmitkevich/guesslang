@@ -56,8 +56,8 @@ int main(int argc, char* argv[])
         learn_fns << validate_fns;
 
         const int klassifier_order = 2;
-        const int max_lang = 9;
-        const int max_shuffle = 200;
+        const int max_lang = 25;
+        const int max_shuffle = 3000;
         const int nlsep = 1; // number of newlines in row to separate sampmles. 1=\n, 0=off, 2=\n\n
 
         QKMedoidsClassifier<QParagraph> klassifier(max_lang, QParagraph(klassifier_order), laplace_likelihood_estimate, max_shuffle);
@@ -68,9 +68,9 @@ int main(int argc, char* argv[])
             QTextStream is(&file);
             //qStdOut() << "reading " << fn << "\n";
             QVector<QParagraph> samples;
-            int n_samples = QParagraph::read_all(is, samples, klassifier_order, QParagraph::is_alpha, 0, 1000, 10000);
+            int n_samples = QParagraph::read_all(is, samples, klassifier_order, QParagraph::is_alpha, 0, 5000, 10000);
             klassifier.append(std::move(samples), fi.baseName());
-            klassifier.shuffle();
+            //klassifier.shuffle();
             int n_itrs = 0;// klassifier.shuffle(max_shuffle);
             DEBUG(QString("S%1 | %2(%3) | ll=%4 | k=%5") % klassifier.samples().size() % fi.baseName() % n_samples
                   % klassifier.likelihood() % klassifier.centroids().size());
